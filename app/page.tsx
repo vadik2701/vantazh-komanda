@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { CalendarDays, CheckCircle2, ClipboardList, History, PackageCheck, Play, Plus, Timer, X } from "lucide-react";
+import { CalendarDays, CheckCircle2, ClipboardList, History, Play, Plus, Timer, X } from "lucide-react";
 
 type Task = {
   id: number;
@@ -74,7 +74,7 @@ export default function Home() {
   return (
     <main className="app-shell">
       <header className="topbar">
-        <div className="brand"><span className="brand-mark"><PackageCheck size={23} /></span><div><strong>Вантаж Команда</strong><small>роботи під контролем</small></div></div>
+        <div className="brand"><span className="brand-mark"><img src="/logo-vantazh-komanda.svg" alt="" /></span><div><strong>Вантаж Команда</strong><small>роботи під контролем</small></div></div>
         <div className="role-switch" aria-label="Оберіть режим">
           <button className={role === "manager" ? "active" : ""} onClick={() => setRole("manager")}>Керівник</button>
           <button className={role === "worker" ? "active" : ""} onClick={() => setRole("worker")}>Бригада</button>

@@ -5,8 +5,9 @@ export const metadata: Metadata = {
   title: "Вантаж Команда — завдання для бригади",
   description: "Планування робіт, таймер і журнал виконаних завдань для вантажників.",
   icons: {
-    icon: "/favicon.svg",
-    shortcut: "/favicon.svg",
+    icon: "/logo-vantazh-komanda.svg",
+    shortcut: "/logo-vantazh-komanda.svg",
+    apple: "/logo-vantazh-komanda.svg",
   },
 };
 
