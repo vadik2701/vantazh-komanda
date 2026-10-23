@@ -1,7 +1,9 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { AlertTriangle, ArrowRightLeft, CalendarDays, CheckCircle2, ClipboardList, History, Play, Plus, Timer, X } from "lucide-react";
+import { AlertTriangle, ArrowRightLeft, CalendarDays, CheckCircle2, ClipboardList, History, LockKeyhole, LogOut, Play, Plus, Timer, X } from "lucide-react";
+
+type AppRole = "manager" | "worker";
 
 type Task = {
   id: number;
@@ -28,7 +30,11 @@ const clock = (seconds: number) => `${String(Math.floor(seconds / 3600)).padStar
 
 export default function Home() {
   const [tasks, setTasks] = useState<Task[]>([]);
-  const [role, setRole] = useState<"manager" | "worker">("manager");
+  const [role, setRole] = useState<AppRole | null>(null);
+  const [authLoading, setAuthLoading] = useState(true);
+  const [loginRole, setLoginRole] = useState<AppRole>("worker");
+  const [pin, setPin] = useState("");
+  const [loginError, setLoginError] = useState("");
   const [section, setSection] = useState<"tasks" | "history">("tasks");
   const [openForm, setOpenForm] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -48,7 +54,11 @@ export default function Home() {
     finally { setLoading(false); }
   }, []);
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => {
+    fetch("/api/session", { cache: "no-store" })
+      .then(async (res) => { if (!res.ok) return; const data = await res.json(); setRole(data.role); await load(); })
+      .finally(() => setAuthLoading(false));
+  }, [load]);
   useEffect(() => { const id = window.setInterval(() => setNow(Date.now()), 1000); return () => window.clearInterval(id); }, []);
 
   const visible = useMemo(() => tasks.filter((task) => section === "history" ? task.status === "completed" : task.status !== "completed"), [tasks, section]);
@@ -89,15 +99,29 @@ export default function Home() {
     setNotice(`Роботу перенесено на ${ukDate(data.task.workDate)}`);
   }
 
+  async function login(event: React.FormEvent) {
+    event.preventDefault();
+    setLoginError("");
+    const res = await fetch("/api/session", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ role: loginRole, pin }) });
+    const data = await res.json();
+    if (!res.ok) return setLoginError(data.error || "Не вдалося увійти");
+    setRole(data.role); setPin(""); setLoading(true); await load();
+  }
+
+  async function logout() {
+    await fetch("/api/session", { method: "DELETE" });
+    setRole(null); setTasks([]); setPin(""); setSection("tasks");
+  }
+
+  if (authLoading) return <div className="auth-loading"><img src="/logo-vantazh-komanda.svg" alt="" /><Timer className="spin" size={25} /><span>Перевіряємо доступ…</span></div>;
+  if (!role) return <LoginScreen role={loginRole} setRole={setLoginRole} pin={pin} setPin={setPin} error={loginError} onSubmit={login} />;
+
   return (
     <main className="app-shell">
       <header className="topbar">
         <div className="brand"><span className="brand-mark"><img src="/logo-vantazh-komanda.svg" alt="" /></span><div><strong>Вантаж Команда</strong><small>роботи під контролем</small></div></div>
-        <div className="role-switch" aria-label="Оберіть режим">
-          <button className={role === "manager" ? "active" : ""} onClick={() => setRole("manager")}>Керівник</button>
-          <button className={role === "worker" ? "active" : ""} onClick={() => setRole("worker")}>Бригада</button>
-        </div>
-        <div className="profile"><span>{role === "manager" ? "К" : "Б"}</span><div><strong>{role === "manager" ? "Керівник" : "Загальна бригада"}</strong><small>{role === "manager" ? "Планування робіт" : "Робочий режим"}</small></div></div>
+        <div className="role-badge"><LockKeyhole size={15} /> {role === "manager" ? "Доступ керівника" : "Доступ бригади"}</div>
+        <div className="profile"><span>{role === "manager" ? "К" : "Б"}</span><div><strong>{role === "manager" ? "Керівник" : "Загальна бригада"}</strong><small>{role === "manager" ? "Планування робіт" : "Робочий режим"}</small></div><button className="logout-button" onClick={logout} aria-label="Вийти"><LogOut size={18} /></button></div>
       </header>
 
       <div className="layout">
@@ -150,3 +174,7 @@ function TaskColumn({ title, count, icon, tasks, now, busy, onAction, onPostpone
 }
 
 function EmptyHistory() { return <div className="empty"><History size={30} /><h3>Історія поки порожня</h3><p>Завершені роботи з тривалістю з’являться тут автоматично.</p></div>; }
+
+function LoginScreen({ role, setRole, pin, setPin, error, onSubmit }: { role: AppRole; setRole: (role: AppRole) => void; pin: string; setPin: (pin: string) => void; error: string; onSubmit: (event: React.FormEvent) => void }) {
+  return <main className="login-page"><section className="login-card"><div className="login-brand"><img src="/logo-vantazh-komanda.svg" alt="Логотип Вантаж Команда" /><div><p className="eyebrow">ЗАХИЩЕНИЙ ВХІД</p><h1>Вантаж Команда</h1><p>Оберіть свій режим і введіть PIN-код</p></div></div><div className="login-role" aria-label="Оберіть роль"><button className={role === "worker" ? "active" : ""} onClick={() => { setRole("worker"); setPin(""); }}>Бригада<small>Виконання робіт</small></button><button className={role === "manager" ? "active" : ""} onClick={() => { setRole("manager"); setPin(""); }}>Керівник<small>Планування і контроль</small></button></div><form onSubmit={onSubmit}><label>PIN-код<input autoFocus required type="password" inputMode="numeric" autoComplete="current-password" placeholder="••••••" value={pin} onChange={(event) => setPin(event.target.value.replace(/\D/g, "").slice(0, 6))} /></label>{error && <div className="login-error">{error}</div>}<button className="login-submit" type="submit"><LockKeyhole size={18} /> Увійти як {role === "manager" ? "керівник" : "бригада"}</button></form><small className="login-note">Доступ зберігається на цьому пристрої протягом робочої зміни.</small></section></main>;
+}

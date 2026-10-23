@@ -1,9 +1,11 @@
 import { eq } from "drizzle-orm";
 import { getDb } from "../../../../db";
 import { tasks } from "../../../../db/schema";
+import { getSessionRole } from "../../../../lib/role-auth";
 
 export async function PATCH(request: Request, context: { params: Promise<{ id: string }> }) {
   try {
+    if (!(await getSessionRole(request))) return Response.json({ error: "Потрібен вхід" }, { status: 401 });
     const { id: rawId } = await context.params;
     const id = Number(rawId);
     const payload = (await request.json()) as { action?: string; reason?: string; newDate?: string };

@@ -1,9 +1,11 @@
 import { desc } from "drizzle-orm";
 import { getDb } from "../../../db";
 import { tasks } from "../../../db/schema";
+import { getSessionRole } from "../../../lib/role-auth";
 
-export async function GET() {
+export async function GET(request: Request) {
   try {
+    if (!(await getSessionRole(request))) return Response.json({ error: "Потрібен вхід" }, { status: 401 });
     const rows = await getDb().select().from(tasks).orderBy(desc(tasks.createdAt), desc(tasks.id));
     return Response.json({ tasks: rows });
   } catch (error) {
@@ -13,6 +15,7 @@ export async function GET() {
 
 export async function POST(request: Request) {
   try {
+    if ((await getSessionRole(request)) !== "manager") return Response.json({ error: "Лише керівник може додавати завдання" }, { status: 403 });
     const payload = (await request.json()) as Record<string, unknown>;
     const title = String(payload.title ?? "").trim();
     const workDate = String(payload.workDate ?? "").trim();
