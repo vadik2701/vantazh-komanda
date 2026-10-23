@@ -12,5 +12,9 @@ export const tasks = sqliteTable("tasks", {
   startedAt: integer("started_at"),
   completedAt: integer("completed_at"),
   durationSeconds: integer("duration_seconds"),
+  postponedReason: text("postponed_reason").notNull().default(""),
+  previousWorkDate: text("previous_work_date"),
+  postponedAt: integer("postponed_at"),
+  transferCount: integer("transfer_count").notNull().default(0),
   createdAt: integer("created_at").notNull(),
 });

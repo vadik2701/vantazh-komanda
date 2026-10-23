@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { CalendarDays, CheckCircle2, ClipboardList, History, Play, Plus, Timer, X } from "lucide-react";
+import { AlertTriangle, ArrowRightLeft, CalendarDays, CheckCircle2, ClipboardList, History, Play, Plus, Timer, X } from "lucide-react";
 
 type Task = {
   id: number;
@@ -15,6 +15,10 @@ type Task = {
   startedAt: number | null;
   completedAt: number | null;
   durationSeconds: number | null;
+  postponedReason: string;
+  previousWorkDate: string | null;
+  postponedAt: number | null;
+  transferCount: number;
 };
 
 const ukDate = (value: string) => new Intl.DateTimeFormat("uk-UA", { day: "numeric", month: "long", weekday: "short" }).format(new Date(`${value}T12:00:00`));
@@ -32,6 +36,7 @@ export default function Home() {
   const [notice, setNotice] = useState("");
   const [now, setNow] = useState(Date.now());
   const [form, setForm] = useState({ title: "", workDate: inputDate(), priority: "today" as "today" | "tomorrow" });
+  const [transfer, setTransfer] = useState<{ task: Task | null; reason: string; newDate: string }>({ task: null, reason: "", newDate: inputDate(1) });
 
   const load = useCallback(async () => {
     try {
@@ -71,6 +76,19 @@ export default function Home() {
     setNotice(actionName === "start" ? "Таймер запущено — гарної роботи!" : `Роботу завершено за ${duration(data.task.durationSeconds)}`);
   }
 
+  async function postponeTask(event: React.FormEvent) {
+    event.preventDefault();
+    if (!transfer.task) return;
+    setBusy(transfer.task.id);
+    const res = await fetch(`/api/tasks/${transfer.task.id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "postpone", reason: transfer.reason, newDate: transfer.newDate }) });
+    const data = await res.json();
+    setBusy(null);
+    if (!res.ok) return setNotice(data.error || "Не вдалося перенести роботу");
+    setTasks((current) => current.map((item) => item.id === data.task.id ? data.task : item));
+    setTransfer({ task: null, reason: "", newDate: inputDate(1) });
+    setNotice(`Роботу перенесено на ${ukDate(data.task.workDate)}`);
+  }
+
   return (
     <main className="app-shell">
       <header className="topbar">
@@ -103,7 +121,7 @@ export default function Home() {
             <div className="history-list">{visible.length ? visible.map((task) => <article className="history-row" key={task.id}><span className="done-icon"><CheckCircle2 size={22} /></span><div className="history-main"><strong>{task.title}</strong><small>Загальна робота</small></div><div><small>{ukDate(task.workDate)}</small><strong>{duration(task.durationSeconds || 0)}</strong></div></article>) : <EmptyHistory />}</div>
           ) : (
             <div className="board">
-              <TaskColumn title="Треба зробити" count={planned.length} icon={<ClipboardList size={18} />} tasks={planned} now={now} busy={busy} onAction={action} />
+              <TaskColumn title="Треба зробити" count={planned.length} icon={<ClipboardList size={18} />} tasks={planned} now={now} busy={busy} onAction={action} onPostpone={(task) => setTransfer({ task, reason: "", newDate: task.workDate < inputDate() ? inputDate() : inputDate(1) })} />
               <TaskColumn title="Зараз у роботі" count={active.length} icon={<Timer size={18} />} tasks={active} now={now} busy={busy} onAction={action} active />
             </div>
           )}
@@ -116,12 +134,19 @@ export default function Home() {
         <fieldset><legend>Важливість</legend><div className="priority-picker"><button type="button" className={form.priority === "today" ? "selected urgent" : ""} onClick={() => setForm({ ...form, priority: "today" })}><span>●</span><div><strong>Обов’язково сьогодні</strong><small>Високий пріоритет</small></div></button><button type="button" className={form.priority === "tomorrow" ? "selected calm" : ""} onClick={() => setForm({ ...form, priority: "tomorrow" })}><span>●</span><div><strong>Можна завтра</strong><small>Звичайний пріоритет</small></div></button></div></fieldset>
         <footer><button type="button" className="secondary" onClick={() => setOpenForm(false)}>Скасувати</button><button className="primary" type="submit"><Plus size={19} /> Додати до плану</button></footer>
       </form></section></div>}
+
+      {transfer.task && <div className="modal-backdrop" onMouseDown={() => setTransfer({ task: null, reason: "", newDate: inputDate(1) })}><section className="modal transfer-modal" onMouseDown={(e) => e.stopPropagation()}><header><div><span className="modal-icon transfer-icon"><ArrowRightLeft size={22} /></span><div><p className="eyebrow">ПЕРЕНЕСЕННЯ</p><h2>Перенести роботу</h2></div></div><button className="icon-button" onClick={() => setTransfer({ task: null, reason: "", newDate: inputDate(1) })} aria-label="Закрити"><X size={20} /></button></header><form onSubmit={postponeTask}>
+        <div className="transfer-task"><small>Робота за {ukDate(transfer.task.workDate)}</small><strong>{transfer.task.title}</strong></div>
+        <label>Чому робота не була виконана? <textarea autoFocus required placeholder="Наприклад: машина приїхала із запізненням" value={transfer.reason} onChange={(e) => setTransfer({ ...transfer, reason: e.target.value })} /></label>
+        <label>Нова дата <input required type="date" min={inputDate()} value={transfer.newDate} onChange={(e) => setTransfer({ ...transfer, newDate: e.target.value })} /></label>
+        <footer><button type="button" className="secondary" onClick={() => setTransfer({ task: null, reason: "", newDate: inputDate(1) })}>Скасувати</button><button className="postpone-confirm" type="submit"><ArrowRightLeft size={18} /> Перенести роботу</button></footer>
+      </form></section></div>}
     </main>
   );
 }
 
-function TaskColumn({ title, count, icon, tasks, now, busy, onAction, active = false }: { title: string; count: number; icon: React.ReactNode; tasks: Task[]; now: number; busy: number | null; onAction: (id: number, action: "start" | "finish") => void; active?: boolean }) {
-  return <section className={`column ${active ? "active-column" : ""}`}><header><span>{icon}</span><h2>{title}</h2><em>{count}</em></header><div className="cards">{tasks.length ? tasks.map((task) => <article className={`task-card ${task.priority}`} key={task.id}><div className="task-top"><span className={`priority ${task.priority}`}>{task.priority === "today" ? "● Обов’язково сьогодні" : "● Можна завтра"}</span><small><CalendarDays size={14} /> {ukDate(task.workDate)}</small></div><h3>{task.title}</h3>{active && task.startedAt ? <div className="live-timer"><div><small>Час у роботі</small><strong>{clock(Math.max(0, Math.floor((now - task.startedAt) / 1000)))}</strong></div><span><i /> Таймер працює</span></div> : null}<button disabled={busy === task.id} className={active ? "finish-button" : "start-button"} onClick={() => onAction(task.id, active ? "finish" : "start")}>{active ? <><CheckCircle2 size={19} /> Завершити роботу</> : <><Play size={18} fill="currentColor" /> Почати роботу</>}</button></article>) : <div className="empty-column"><CheckCircle2 size={24} /><strong>{active ? "Ніхто ще не почав" : "Усе виконано"}</strong><small>{active ? "Активні роботи з’являться тут" : "Нові завдання з’являться тут"}</small></div>}</div></section>;
+function TaskColumn({ title, count, icon, tasks, now, busy, onAction, onPostpone, active = false }: { title: string; count: number; icon: React.ReactNode; tasks: Task[]; now: number; busy: number | null; onAction: (id: number, action: "start" | "finish") => void; onPostpone?: (task: Task) => void; active?: boolean }) {
+  return <section className={`column ${active ? "active-column" : ""}`}><header><span>{icon}</span><h2>{title}</h2><em>{count}</em></header><div className="cards">{tasks.length ? tasks.map((task) => { const overdue = task.workDate < inputDate(); return <article className={`task-card ${overdue ? "overdue" : task.priority}`} key={task.id}><div className="task-top"><span className={`priority ${overdue ? "overdue" : task.priority}`}>{overdue ? "● Не виконано" : task.priority === "today" ? "● Обов’язково сьогодні" : "● Можна завтра"}</span><small><CalendarDays size={14} /> {ukDate(task.workDate)}</small></div><h3>{task.title}</h3>{overdue && <div className="overdue-note"><AlertTriangle size={16} /><span>Термін минув. Робота не виконана.</span></div>}{task.previousWorkDate && task.postponedReason && <div className="transfer-note"><ArrowRightLeft size={15} /><span><b>Перенесено з {ukDate(task.previousWorkDate)}:</b> {task.postponedReason}</span></div>}{active && task.startedAt ? <div className="live-timer"><div><small>Час у роботі</small><strong>{clock(Math.max(0, Math.floor((now - task.startedAt) / 1000)))}</strong></div><span><i /> Таймер працює</span></div> : null}{active ? <button disabled={busy === task.id} className="finish-button" onClick={() => onAction(task.id, "finish")}><CheckCircle2 size={19} /> Завершити роботу</button> : <div className="task-actions"><button disabled={busy === task.id} className="start-button" onClick={() => onAction(task.id, "start")}><Play size={18} fill="currentColor" /> Почати роботу</button><button disabled={busy === task.id} className="postpone-button" onClick={() => onPostpone?.(task)}><ArrowRightLeft size={17} /> Перенести</button></div>}</article>; }) : <div className="empty-column"><CheckCircle2 size={24} /><strong>{active ? "Ніхто ще не почав" : "Усе виконано"}</strong><small>{active ? "Активні роботи з’являться тут" : "Нові завдання з’являться тут"}</small></div>}</div></section>;
 }
 
 function EmptyHistory() { return <div className="empty"><History size={30} /><h3>Історія поки порожня</h3><p>Завершені роботи з тривалістю з’являться тут автоматично.</p></div>; }
