@@ -15,14 +15,13 @@ export async function POST(request: Request) {
   try {
     const payload = (await request.json()) as Record<string, unknown>;
     const title = String(payload.title ?? "").trim();
-    const assignee = String(payload.assignee ?? "").trim();
     const workDate = String(payload.workDate ?? "").trim();
-    if (!title || !assignee || !/^\d{4}-\d{2}-\d{2}$/.test(workDate)) {
-      return Response.json({ error: "Заповніть назву, працівника і дату" }, { status: 400 });
+    if (!title || !/^\d{4}-\d{2}-\d{2}$/.test(workDate)) {
+      return Response.json({ error: "Заповніть завдання і дату" }, { status: 400 });
     }
     const [task] = await getDb().insert(tasks).values({
       title,
-      assignee,
+      assignee: "Загальна бригада",
       workDate,
       description: String(payload.description ?? "").trim(),
       location: String(payload.location ?? "").trim(),
