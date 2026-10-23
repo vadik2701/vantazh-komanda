@@ -31,7 +31,7 @@ export default function Home() {
   const [busy, setBusy] = useState<number | null>(null);
   const [notice, setNotice] = useState("");
   const [now, setNow] = useState(Date.now());
-  const [form, setForm] = useState({ title: "", workDate: inputDate() });
+  const [form, setForm] = useState({ title: "", workDate: inputDate(), priority: "today" as "today" | "tomorrow" });
 
   const load = useCallback(async () => {
     try {
@@ -53,11 +53,11 @@ export default function Home() {
 
   async function createTask(event: React.FormEvent) {
     event.preventDefault();
-    const res = await fetch("/api/tasks", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...form, priority: form.workDate <= inputDate() ? "today" : "tomorrow" }) });
+    const res = await fetch("/api/tasks", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(form) });
     const data = await res.json();
     if (!res.ok) return setNotice(data.error || "Не вдалося додати завдання");
     setTasks((current) => [data.task, ...current]);
-    setForm({ title: "", workDate: inputDate() });
+    setForm({ title: "", workDate: inputDate(), priority: "today" });
     setOpenForm(false); setNotice("Завдання додано до плану");
   }
 
@@ -113,7 +113,7 @@ export default function Home() {
       {openForm && <div className="modal-backdrop" onMouseDown={() => setOpenForm(false)}><section className="modal" onMouseDown={(e) => e.stopPropagation()}><header><div><span className="modal-icon"><Plus size={22} /></span><div><p className="eyebrow">ПЛАНУВАННЯ</p><h2>Нове завдання</h2></div></div><button className="icon-button" onClick={() => setOpenForm(false)} aria-label="Закрити"><X size={20} /></button></header><form onSubmit={createTask}>
         <label>Текст завдання <textarea autoFocus required placeholder="Наприклад: розвантажити 12 палет і скласти у зоні B" value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} /></label>
         <label>Дата виконання <input required type="date" value={form.workDate} onChange={(e) => setForm({ ...form, workDate: e.target.value })} /></label>
-        <p className="date-hint">Позначка «сьогодні» або «можна завтра» з’явиться автоматично відповідно до дати.</p>
+        <fieldset><legend>Важливість</legend><div className="priority-picker"><button type="button" className={form.priority === "today" ? "selected urgent" : ""} onClick={() => setForm({ ...form, priority: "today" })}><span>●</span><div><strong>Обов’язково сьогодні</strong><small>Високий пріоритет</small></div></button><button type="button" className={form.priority === "tomorrow" ? "selected calm" : ""} onClick={() => setForm({ ...form, priority: "tomorrow" })}><span>●</span><div><strong>Можна завтра</strong><small>Звичайний пріоритет</small></div></button></div></fieldset>
         <footer><button type="button" className="secondary" onClick={() => setOpenForm(false)}>Скасувати</button><button className="primary" type="submit"><Plus size={19} /> Додати до плану</button></footer>
       </form></section></div>}
     </main>
